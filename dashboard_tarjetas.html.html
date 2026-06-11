@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Tarjetas Corporativas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--border:#30363d;
+    --text:#e6edf3;--muted:#8b949e;--bci:#3b82f6;--scot:#a78bfa;
+    --g66:#34d399;--ok:#22c55e;--sinresp:#ef4444;--accent:#58a6ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:100%;height:100%;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;}
+
+  .header{padding:22px 28px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .header h1{font-size:18px;font-weight:600;}
+  .header h1 span{color:var(--accent);}
+  .year-tabs{display:flex;gap:6px;}
+  .year-tab{padding:5px 16px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;}
+  .year-tab.active{background:var(--accent);border-color:var(--accent);color:#0d1117;}
+  .year-tab:hover:not(.active){border-color:var(--accent);color:var(--accent);}
+
+  .main{padding:20px 28px;display:flex;flex-direction:column;gap:18px;}
+
+  /* KPIs */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+  .kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px;}
+  .kpi-value{font-size:24px;font-weight:700;line-height:1.1;}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+  .c-blue{color:var(--accent);}.c-green{color:var(--ok);}.c-red{color:var(--sinresp);}.c-teal{color:var(--g66);}
+
+  /* Grid */
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+
+  /* Cards */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;}
+  .card-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;}
+
+  /* Chart containers — altura FIJA para que Chart.js no colapse */
+  .chart-box{position:relative;width:100%;height:220px;}
+
+  /* Proveedores / plataformas bar list */
+  .pbar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .pbar-label{width:138px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;color:var(--text);}
+  .pbar-track{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+  .pbar-fill{height:100%;border-radius:3px;}
+  .pbar-val{font-size:11px;color:var(--muted);width:88px;text-align:right;flex-shrink:0;}
+
+  /* Tabla sin respaldo */
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);font-weight:600;}
+  tbody td{padding:7px 8px;border-bottom:1px solid #21262d;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover td{background:var(--surface2);}
+  .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;}
+  .badge-bci{background:#0d1f3c;color:var(--bci);}
+  .badge-scot{background:#1a1030;color:var(--scot);}
+
+  .usd-row{display:flex;align-items:center;gap:7px;margin-bottom:12px;}
+  .g66-dot{width:7px;height:7px;border-radius:50%;background:var(--g66);flex-shrink:0;}
+  .sep{height:1px;background:var(--border);margin:0 0 14px;}
+  .note{font-size:10px;color:var(--muted);margin-top:8px;padding-top:6px;border-top:1px solid var(--border);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Tarjetas Corporativas <span>2025 – 2026</span></h1>
+  <div class="year-tabs">
+    <button class="year-tab active" onclick="setYear(2025)">2025</button>
+    <button class="year-tab" onclick="setYear(2026)">2026</button>
+    <button class="year-tab" onclick="setYear(0)">Ambos</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <!-- Gasto mensual + Donut -->
+  <div class="row-2">
+    <div class="card">
+      <div class="card-title">Gasto mensual CLP — BCI vs Scotiabank</div>
+      <div class="chart-box"><canvas id="chartMonthly"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Estado de conciliación (CLP)</div>
+      <div class="chart-box"><canvas id="chartEstado"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Top proveedores + G66 mensual -->
+  <div class="row-2">
+    <div class="card">
+      <div class="card-title">Top proveedores — BCI + Scotiabank</div>
+      <div id="top-prov-content"></div>
+    </div>
+    <div class="card">
+      <div class="usd-row"><span class="g66-dot"></span><span class="card-title" style="margin:0">Global 66 — Gasto mensual USD</span></div>
+      <div class="sep"></div>
+      <div class="chart-box"><canvas id="chartG66"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Top plataformas USD + Sin respaldo -->
+  <div class="row-2">
+    <div class="card">
+      <div class="usd-row"><span class="g66-dot"></span><span class="card-title" style="margin:0">Top plataformas USD — Global 66 (acumulado)</span></div>
+      <div class="sep"></div>
+      <div id="top-usd-content"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Gastos sin respaldo — detalle</div>
+      <div class="table-wrap">
+        <table id="sin-resp-table">
+          <thead><tr><th>Descripción</th><th>Banco</th><th>Monto CLP</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note">* Excluye traspasos de deuda, intereses mora y comisiones bancarias</div>
+    </div>
+  </div>
+
+  <!-- CLP compras USD -->
+  <div class="card">
+    <div class="usd-row"><span class="g66-dot"></span><span class="card-title" style="margin:0">CLP invertido en compra de dólares — Global 66</span></div>
+    <div class="sep"></div>
+    <div class="chart-box" style="height:140px;"><canvas id="chartComprasUSD"></canvas></div>
+  </div>
+
+</div>
+
+<script>
+const RAW = {"monthly": [{"anio": 2025, "mes": 1, "banco": "BCI", "monto_clp": 3916552.0, "mes_nombre": "Ene"}, {"anio": 2025, "mes": 2, "banco": "BCI", "monto_clp": 2971311.0, "mes_nombre": "Feb"}, {"anio": 2025, "mes": 3, "banco": "BCI", "monto_clp": 10077885.0, "mes_nombre": "Mar"}, {"anio": 2025, "mes": 4, "banco": "BCI", "monto_clp": 5941678.0, "mes_nombre": "Abr"}, {"anio": 2025, "mes": 5, "banco": "BCI", "monto_clp": 7175468.0, "mes_nombre": "May"}, {"anio": 2025, "mes": 5, "banco": "Scotiabank", "monto_clp": 58750.0, "mes_nombre": "May"}, {"anio": 2025, "mes": 6, "banco": "BCI", "monto_clp": 3131715.0, "mes_nombre": "Jun"}, {"anio": 2025, "mes": 7, "banco": "BCI", "monto_clp": 4820068.0, "mes_nombre": "Jul"}, {"anio": 2025, "mes": 8, "banco": "BCI", "monto_clp": 4506597.0, "mes_nombre": "Ago"}, {"anio": 2025, "mes": 9, "banco": "BCI", "monto_clp": 4610936.0, "mes_nombre": "Sep"}, {"anio": 2025, "mes": 9, "banco": "Scotiabank", "monto_clp": 733762.0, "mes_nombre": "Sep"}, {"anio": 2025, "mes": 10, "banco": "BCI", "monto_clp": 7605823.0, "mes_nombre": "Oct"}, {"anio": 2025, "mes": 10, "banco": "Scotiabank", "monto_clp": 1151256.0, "mes_nombre": "Oct"}, {"anio": 2025, "mes": 11, "banco": "BCI", "monto_clp": 5477629.0, "mes_nombre": "Nov"}, {"anio": 2025, "mes": 11, "banco": "Scotiabank", "monto_clp": 2026737.0, "mes_nombre": "Nov"}, {"anio": 2025, "mes": 12, "banco": "BCI", "monto_clp": 6644814.0, "mes_nombre": "Dic"}, {"anio": 2025, "mes": 12, "banco": "Scotiabank", "monto_clp": 3969974.0, "mes_nombre": "Dic"}, {"anio": 2026, "mes": 1, "banco": "BCI", "monto_clp": 3260976.0, "mes_nombre": "Ene"}, {"anio": 2026, "mes": 1, "banco": "Scotiabank", "monto_clp": 3929428.0, "mes_nombre": "Ene"}, {"anio": 2026, "mes": 2, "banco": "BCI", "monto_clp": 7270557.0, "mes_nombre": "Feb"}, {"anio": 2026, "mes": 2, "banco": "Scotiabank", "monto_clp": 3622665.0, "mes_nombre": "Feb"}, {"anio": 2026, "mes": 3, "banco": "BCI", "monto_clp": 3445899.0, "mes_nombre": "Mar"}, {"anio": 2026, "mes": 3, "banco": "Scotiabank", "monto_clp": 3543822.0, "mes_nombre": "Mar"}, {"anio": 2026, "mes": 4, "banco": "BCI", "monto_clp": 5096466.0, "mes_nombre": "Abr"}, {"anio": 2026, "mes": 4, "banco": "Scotiabank", "monto_clp": 127565.0, "mes_nombre": "Abr"}, {"anio": 2026, "mes": 5, "banco": "BCI", "monto_clp": 5848308.0, "mes_nombre": "May"}, {"anio": 2026, "mes": 5, "banco": "Scotiabank", "monto_clp": 3270888.0, "mes_nombre": "May"}], "estados": [{"anio": 2025, "estado": "OK", "monto_clp": 73082082.0}, {"anio": 2025, "estado": "Sin respaldo", "monto_clp": 1738873.0}, {"anio": 2026, "estado": "OK", "monto_clp": 38010023.0}, {"anio": 2026, "estado": "Sin respaldo", "monto_clp": 1406551.0}], "g66_usd_m": [{"anio": 2025, "mes": 1, "usd_salida": 156318.8, "mes_nombre": "Ene"}, {"anio": 2025, "mes": 2, "usd_salida": 14847.789999999999, "mes_nombre": "Feb"}, {"anio": 2025, "mes": 3, "usd_salida": 220889.27000000002, "mes_nombre": "Mar"}, {"anio": 2025, "mes": 4, "usd_salida": 144194.4, "mes_nombre": "Abr"}, {"anio": 2025, "mes": 5, "usd_salida": 127670.84, "mes_nombre": "May"}, {"anio": 2025, "mes": 6, "usd_salida": 110025.15, "mes_nombre": "Jun"}, {"anio": 2025, "mes": 7, "usd_salida": 16159.1, "mes_nombre": "Jul"}, {"anio": 2025, "mes": 8, "usd_salida": 152105.93, "mes_nombre": "Ago"}, {"anio": 2025, "mes": 9, "usd_salida": 104174.51, "mes_nombre": "Sep"}, {"anio": 2025, "mes": 10, "usd_salida": 234643.59, "mes_nombre": "Oct"}, {"anio": 2025, "mes": 11, "usd_salida": 191885.57, "mes_nombre": "Nov"}, {"anio": 2025, "mes": 12, "usd_salida": 125459.9, "mes_nombre": "Dic"}, {"anio": 2026, "mes": 1, "usd_salida": 126466.4, "mes_nombre": "Ene"}, {"anio": 2026, "mes": 2, "usd_salida": 83816.33, "mes_nombre": "Feb"}, {"anio": 2026, "mes": 3, "usd_salida": 32796.56, "mes_nombre": "Mar"}, {"anio": 2026, "mes": 4, "usd_salida": 161111.54, "mes_nombre": "Abr"}, {"anio": 2026, "mes": 5, "usd_salida": 93286.02, "mes_nombre": "May"}, {"anio": 2026, "mes": 6, "usd_salida": 7293.57, "mes_nombre": "Jun"}], "top_usd_all": [{"plat_clean": "Facebook Ads", "usd_salida": 1676731.68}, {"plat_clean": "TikTok Ads", "usd_salida": 159697.39}, {"plat_clean": "Amazon / AWS", "usd_salida": 43157.51}, {"plat_clean": "Brandwatch", "usd_salida": 35252.7}, {"plat_clean": "Slack", "usd_salida": 34392.19}, {"plat_clean": "Socialbakers", "usd_salida": 24300.0}, {"plat_clean": "DigitalOcean", "usd_salida": 23561.71}, {"plat_clean": "Deel", "usd_salida": 21603.97}, {"plat_clean": "Semrush", "usd_salida": 13483.33}, {"plat_clean": "Supermetrics", "usd_salida": 11194.0}, {"plat_clean": "Atlassian", "usd_salida": 8300.58}, {"plat_clean": "Figma", "usd_salida": 7218.32}, {"plat_clean": "Blind Creator", "usd_salida": 5555.0}, {"plat_clean": "Anthropic / Claude", "usd_salida": 3577.1}, {"plat_clean": "Cursor.ai", "usd_salida": 3135.88}], "compras_usd": [{"anio": 2025, "mes": 1, "usd_comprado": 110615.34043, "clp_salida": 154360000.0, "mes_nombre": "Ene"}, {"anio": 2025, "mes": 2, "usd_comprado": 127143.41183999999, "clp_salida": 109550000.0, "mes_nombre": "Feb"}, {"anio": 2025, "mes": 3, "usd_comprado": 151944.09811999998, "clp_salida": 189240000.0, "mes_nombre": "Mar"}, {"anio": 2025, "mes": 4, "usd_comprado": 295.10324, "clp_salida": 139440000.0, "mes_nombre": "Abr"}, {"anio": 2025, "mes": 5, "usd_comprado": 106006.15006, "clp_salida": 99600000.0, "mes_nombre": "May"}, {"anio": 2025, "mes": 6, "usd_comprado": 106725.9913, "clp_salida": 119520000.0, "mes_nombre": "Jun"}, {"anio": 2025, "mes": 8, "usd_comprado": 248456.92312000002, "clp_salida": 144420000.0, "mes_nombre": "Ago"}, {"anio": 2025, "mes": 9, "usd_comprado": 176.99464, "clp_salida": 84660000.0, "mes_nombre": "Sep"}, {"anio": 2025, "mes": 10, "usd_comprado": 137052.27374, "clp_salida": 169622775.0, "mes_nombre": "Oct"}, {"anio": 2025, "mes": 11, "usd_comprado": 426.58322, "clp_salida": 199200000.0, "mes_nombre": "Nov"}, {"anio": 2025, "mes": 12, "usd_comprado": 216.65154, "clp_salida": 99100000.0, "mes_nombre": "Dic"}, {"anio": 2026, "mes": 1, "usd_comprado": 110481.28443999999, "clp_salida": 149390000.0, "mes_nombre": "Ene"}, {"anio": 2026, "mes": 2, "usd_comprado": 69832.01214, "clp_salida": 49800000.0, "mes_nombre": "Feb"}, {"anio": 2026, "mes": 3, "usd_comprado": 40.0, "clp_salida": 18493600.0, "mes_nombre": "Mar"}, {"anio": 2026, "mes": 4, "usd_comprado": 66502.16149, "clp_salida": 90312785.0, "mes_nombre": "Abr"}, {"anio": 2026, "mes": 5, "usd_comprado": 224.28206, "clp_salida": 99900000.0, "mes_nombre": "May"}], "sin_resp": [{"descripcion": "DP *FALABELLA.C SANTIAGO", "banco": "BCI", "monto_clp": 1464890.0}, {"descripcion": "LINKEDIN LINKEDIN LAS CONDES", "banco": "BCI", "monto_clp": 488813.0}, {"descripcion": "MP *SKY AIRLINE SANTIAGO", "banco": "BCI", "monto_clp": 321660.0}, {"descripcion": "M3STORAGE SANTIAGO", "banco": "BCI", "monto_clp": 263997.0}, {"descripcion": "LINKEDIN LINKEDIN", "banco": "Scotiabank", "monto_clp": 175563.0}, {"descripcion": "MERCADOPAGO*ARTICUL LAS CONDES", "banco": "BCI", "monto_clp": 153593.0}, {"descripcion": "JUSTO SANTIAGO", "banco": "BCI", "monto_clp": 64100.0}, {"descripcion": "SERVICIO DE ADMINISTRATION SEMESTRAL", "banco": "Scotiabank", "monto_clp": 60638.0}, {"descripcion": "LIDER.CL COMPRA DIR SANTIAGO", "banco": "BCI", "monto_clp": 59990.0}, {"descripcion": "LATAMTRAVEL TCOMP SANTIAGO", "banco": "BCI", "monto_clp": 54720.0}, {"descripcion": "MERCADOPAGO*MERCADO LAS CONDES", "banco": "BCI", "monto_clp": 15980.0}, {"descripcion": "EPARIS MARKETPLACE SANTIAGO", "banco": "BCI", "monto_clp": 14970.0}, {"descripcion": "MERPAGO*LINKMAX LAS CONDES", "banco": "BCI", "monto_clp": 4920.0}, {"descripcion": "JUMBO ONECLICK SANTIAGO", "banco": "BCI", "monto_clp": 1590.0}], "resumen": {"total_2025_clp": 74820955.0, "total_2026_clp": 39416574.0, "total_usd_2025": 1598374.85, "total_usd_2026": 504770.42, "ok_2025": 73082082.0, "ok_2026": 38010023.0, "sin_resp_2025": 1738873.0, "sin_resp_2026": 1406551.0, "n_trans_2025": 419, "n_trans_2026": 209}};
+
+let currentYear = 2025;
+let charts = {};
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 400 },
+  plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 12, padding: 12 } } },
+};
+
+const GRID_COLOR = '#21262d';
+const TICK_STYLE = { color: '#8b949e', font: { size: 11 } };
+
+const fmt = v => v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + Math.round(v).toLocaleString('es-CL');
+const fmtUSD = v => v >= 1e6 ? 'USD ' + (v/1e6).toFixed(2) + 'M' : v >= 1e3 ? 'USD ' + (v/1e3).toFixed(1) + 'K' : 'USD ' + v.toFixed(0);
+
+function destroyChart(key) {
+  if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+}
+
+function setYear(y) {
+  currentYear = y;
+  document.querySelectorAll('.year-tab').forEach((t,i) => t.classList.toggle('active', [2025,2026,0][i] === y));
+  renderAll();
+}
+
+/* ---- KPIs ---- */
+function renderKPIs() {
+  const r = RAW.resumen, y = currentYear;
+  let total, usd, ok, sinr, n;
+  if (y === 0)      { total=r.total_2025_clp+r.total_2026_clp; usd=r.total_usd_2025+r.total_usd_2026; ok=r.ok_2025+r.ok_2026; sinr=r.sin_resp_2025+r.sin_resp_2026; n=r.n_trans_2025+r.n_trans_2026; }
+  else if (y===2025){ total=r.total_2025_clp; usd=r.total_usd_2025; ok=r.ok_2025; sinr=r.sin_resp_2025; n=r.n_trans_2025; }
+  else              { total=r.total_2026_clp; usd=r.total_usd_2026; ok=r.ok_2026; sinr=r.sin_resp_2026; n=r.n_trans_2026; }
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Gasto total CLP</div><div class="kpi-value c-blue">${fmt(total)}</div><div class="kpi-sub">${n} transacciones</div></div>
+    <div class="kpi"><div class="kpi-label">Gasto USD — Global 66</div><div class="kpi-value c-teal">${fmtUSD(usd)}</div><div class="kpi-sub">tarjeta prepago internacional</div></div>
+    <div class="kpi"><div class="kpi-label">Con respaldo OK</div><div class="kpi-value c-green">${(ok/total*100).toFixed(1)}%</div><div class="kpi-sub">${fmt(ok)} CLP</div></div>
+    <div class="kpi"><div class="kpi-label">Sin respaldo</div><div class="kpi-value c-red">${(sinr/total*100).toFixed(1)}%</div><div class="kpi-sub">${fmt(sinr)} CLP</div></div>`;
+}
+
+/* ---- Gasto mensual ---- */
+function renderMonthly() {
+  const y = currentYear;
+  const allMes   = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const allNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const useMes   = y===2026 ? allMes.slice(0,6) : allMes;
+  const labels   = y===2026 ? allNames.slice(0,6) : allNames;
+  const bci = [], scot = [];
+  for (const m of useMes) {
+    const rows = RAW.monthly.filter(r => (y===0||r.anio===y) && r.mes===m);
+    bci.push( rows.filter(r=>r.banco==='BCI').reduce((s,r)=>s+r.monto_clp,0) / 1e6 );
+    scot.push( rows.filter(r=>r.banco==='Scotiabank').reduce((s,r)=>s+r.monto_clp,0) / 1e6 );
+  }
+  destroyChart('monthly');
+  charts.monthly = new Chart(document.getElementById('chartMonthly'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'BCI',       data:bci,  backgroundColor:'#3b82f677', borderColor:'#3b82f6', borderWidth:1, borderRadius:3 },
+      { label:'Scotiabank',data:scot, backgroundColor:'#a78bfa77', borderColor:'#a78bfa', borderWidth:1, borderRadius:3 },
+    ]},
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, tooltip:{ callbacks:{ label:c=>` ${c.dataset.label}: $${c.raw.toFixed(1)}M` }}},
+      scales: {
+        x: { ticks:TICK_STYLE, grid:{ color:GRID_COLOR } },
+        y: { ticks:{ ...TICK_STYLE, callback:v=>'$'+v+'M' }, grid:{ color:GRID_COLOR }, beginAtZero:true }
+      }
+    }
+  });
+}
+
+/* ---- Donut estado ---- */
+function renderEstado() {
+  const y = currentYear;
+  const map = {};
+  RAW.estados.filter(r => y===0||r.anio===y).forEach(r => { map[r.estado] = (map[r.estado]||0)+r.monto_clp; });
+  const labels = Object.keys(map), vals = labels.map(k=>map[k]);
+  const total = vals.reduce((a,b)=>a+b,0);
+  destroyChart('estado');
+  charts.estado = new Chart(document.getElementById('chartEstado'), {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data:vals, backgroundColor:['#22c55e','#ef4444'], borderColor:'#0d1117', borderWidth:2, hoverOffset:6 }] },
+    options: { responsive:true, maintainAspectRatio:false, animation:{ duration:400 }, cutout:'65%',
+      plugins:{ legend:{ position:'right', labels:{ color:'#8b949e', font:{size:12}, padding:14, boxWidth:12 }},
+        tooltip:{ callbacks:{ label:c=>` ${c.label}: ${fmt(c.raw)} (${(c.raw/total*100).toFixed(1)}%)` }}
+      }
+    }
+  });
+}
+
+/* ---- Top proveedores ---- */
+function renderTopProv() {
+  const top = [
+    {name:'Adobe',          val:25617901, color:'#ef4444'},
+    {name:'Latam Airlines', val:17059567, color:'#f97316'},
+    {name:'LinkedIn',       val:12295162, color:'#3b82f6'},
+    {name:'Copec',          val:9428952,  color:'#22c55e'},
+    {name:'Maconline / Mac',val:6809900,  color:'#8b5cf6'},
+    {name:'Cencosud/Jumbo', val:3946645,  color:'#14b8a6'},
+    {name:'Getty Images',   val:1758652,  color:'#f59e0b'},
+    {name:'M3Storage',      val:1617048,  color:'#60a5fa'},
+  ];
+  const max = top[0].val;
+  document.getElementById('top-prov-content').innerHTML = top.map(d => `
+    <div class="pbar-row">
+      <div class="pbar-label">${d.name}</div>
+      <div class="pbar-track"><div class="pbar-fill" style="width:${(d.val/max*100).toFixed(1)}%;background:${d.color}"></div></div>
+      <div class="pbar-val">${fmt(d.val)}</div>
+    </div>`).join('');
+}
+
+/* ---- G66 USD mensual ---- */
+function renderG66() {
+  const y = currentYear;
+  const mo = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const map = {};
+  RAW.g66_usd_m.filter(r=>y===0||r.anio===y).forEach(r=>{ map[r.mes_nombre]=(map[r.mes_nombre]||0)+r.usd_salida; });
+  const labels = mo.filter(m=>map[m]!==undefined);
+  const data   = labels.map(m => map[m]/1000);
+  destroyChart('g66');
+  charts.g66 = new Chart(document.getElementById('chartG66'), {
+    type: 'line',
+    data: { labels, datasets:[{ data, borderColor:'#34d399', backgroundColor:'#34d39918', fill:true, tension:.35, pointBackgroundColor:'#34d399', pointRadius:4, pointHoverRadius:6 }] },
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, legend:{display:false}, tooltip:{ callbacks:{ label:c=>` USD ${(c.raw*1000).toLocaleString('es-CL',{maximumFractionDigits:0})}` }}},
+      scales: {
+        x: { ticks:TICK_STYLE, grid:{ color:GRID_COLOR } },
+        y: { ticks:{ ...TICK_STYLE, callback:v=>'$'+v+'K' }, grid:{ color:GRID_COLOR }, beginAtZero:true }
+      }
+    }
+  });
+}
+
+/* ---- Top plataformas USD ---- */
+function renderTopUSD() {
+  const pal = ['#ef4444','#f97316','#f59e0b','#84cc16','#22c55e','#14b8a6','#3b82f6','#8b5cf6','#ec4899','#34d399','#60a5fa','#a78bfa','#fb923c','#4ade80','#38bdf8'];
+  const max = RAW.top_usd_all[0].usd_salida;
+  document.getElementById('top-usd-content').innerHTML = RAW.top_usd_all.map((d,i) => `
+    <div class="pbar-row">
+      <div class="pbar-label">${d.plat_clean}</div>
+      <div class="pbar-track"><div class="pbar-fill" style="width:${(d.usd_salida/max*100).toFixed(1)}%;background:${pal[i%pal.length]}"></div></div>
+      <div class="pbar-val">${fmtUSD(d.usd_salida)}</div>
+    </div>`).join('');
+}
+
+/* ---- Sin respaldo ---- */
+function renderSinResp() {
+  document.querySelector('#sin-resp-table tbody').innerHTML = RAW.sin_resp.map(r => `
+    <tr>
+      <td>${r.descripcion}</td>
+      <td><span class="badge ${r.banco==='BCI'?'badge-bci':'badge-scot'}">${r.banco}</span></td>
+      <td>${fmt(r.monto_clp)}</td>
+    </tr>`).join('');
+}
+
+/* ---- Compras USD ---- */
+function renderComprasUSD() {
+  const y = currentYear;
+  const mo = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const map = {};
+  RAW.compras_usd.filter(r=>y===0||r.anio===y).forEach(r=>{ map[r.mes_nombre]=(map[r.mes_nombre]||0)+r.clp_salida; });
+  const labels = mo.filter(m=>map[m]!==undefined);
+  const data   = labels.map(m=>map[m]/1e6);
+  destroyChart('compras');
+  charts.compras = new Chart(document.getElementById('chartComprasUSD'), {
+    type: 'bar',
+    data: { labels, datasets:[{ data, backgroundColor:'#34d39940', borderColor:'#34d399', borderWidth:1, borderRadius:3 }] },
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, legend:{display:false}, tooltip:{ callbacks:{ label:c=>` $${c.raw.toFixed(1)}M CLP` }}},
+      scales: {
+        x: { ticks:TICK_STYLE, grid:{ color:GRID_COLOR } },
+        y: { ticks:{ ...TICK_STYLE, callback:v=>'$'+v+'M' }, grid:{ color:GRID_COLOR }, beginAtZero:true }
+      }
+    }
+  });
+}
+
+function renderAll() {
+  renderKPIs(); renderMonthly(); renderEstado(); renderTopProv();
+  renderG66(); renderTopUSD(); renderSinResp(); renderComprasUSD();
+}
+
+renderAll();
+</script>
+</body>
+</html>
